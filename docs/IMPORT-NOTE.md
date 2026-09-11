@@ -1,0 +1,1 @@
+The supplied file is titled “23 Projects that has been showcased by far in the Siba Launchpad”, but the parsed document text contains 17 distinct project/showcase entries. The last Career Advisor AI entry is incomplete. The importer therefore includes only source-supported details and does not invent the missing records.

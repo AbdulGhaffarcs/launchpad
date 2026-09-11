@@ -1,0 +1,38 @@
+---
+import '../styles.css';
+
+const { title = 'Launchpad', description = 'Projects built by the IBA CS community.' } = Astro.props;
+const session = Astro.locals.session;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <title>{title} · Launchpad</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Launchpad home">
+        <span class="brand-mark">↗</span>
+        <span>Launchpad</span>
+      </a>
+      <nav>
+        <a href="/">Projects</a>
+        <a href="/submit">Submit</a>
+        {session ? (
+          <form method="post" action="/api/auth/logout"><button class="nav-button" type="submit">Sign out</button></form>
+        ) : (
+          <a class="nav-button" href="/api/auth/github">Sign in with GitHub</a>
+        )}
+      </nav>
+    </header>
+    <main><slot /></main>
+    <footer>
+      <span>Launchpad · projects built by IBA CS students</span>
+      <a href="https://github.com/IBA-Launchpad/launchpad">Open source</a>
+    </footer>
+  </body>
+</html>

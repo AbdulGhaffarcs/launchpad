@@ -1,0 +1,74 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+const session = Astro.locals.session;
+---
+<BaseLayout title="Submit a project">
+  <section class="submit-page">
+    <p class="eyebrow">PROJECT SHOWCASE</p>
+    <h1>Put your work on Launchpad.</h1>
+    <p class="hero-copy">A GitHub repository is preferred, but it is not required. Sign in with GitHub to submit and to keep the same account across future visits.</p>
+    {session ? (
+      <form id="submit-form" class="form-card">
+        <div class="signed-in"><img src={session.avatarUrl} alt="" /><span>Signed in as <strong>{session.login}</strong></span></div>
+        <label>Project name<input name="title" required maxlength="100" /></label>
+        <label>What does it do / why is it useful?<textarea name="description" required maxlength="1200" rows="5"></textarea></label>
+        <div class="two-col">
+          <label>GitHub repository<input name="github" type="url" placeholder="https://github.com/..." /></label>
+          <label>Demo / website<input name="demo" type="url" placeholder="https://..." /></label>
+        </div>
+        <div class="two-col">
+          <label>LinkedIn<input name="linkedin" type="url" placeholder="https://linkedin.com/in/..." /></label>
+          <label>Category<select name="category"><option>AI</option><option>Web</option><option>Mobile</option><option>Systems</option><option>Security</option><option>Data</option><option>Education</option><option>Developer Tools</option><option>Other</option></select></label>
+        </div>
+        <label>Tech stack<input name="stack" placeholder="React, Python, Supabase" /></label>
+        <label>Looking for<input name="lookingFor" placeholder="Users, Feedback, Contributors" /></label>
+        <button class="button primary full" type="submit">Publish to Launchpad</button>
+        <p id="form-status" class="form-status"></p>
+      </form>
+    ) : (
+      <div class="login-card">
+        <h2>One sign-in. Then you're done.</h2>
+        <p>Browsing is public. Submission and GitHub actions use your GitHub account, with a persistent Launchpad session so you don't keep signing in.</p>
+        <a class="button primary" href="/api/auth/github?next=/submit">Continue with GitHub</a>
+      </div>
+    )}
+  </section>
+</BaseLayout>
+<script>
+  const form = document.querySelector<HTMLFormElement>('#submit-form');
+
+  if (form) {
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const status = document.querySelector<HTMLElement>('#form-status');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!button || !status) return;
+
+      button.disabled = true;
+      status.textContent = 'Publishing…';
+      const data = Object.fromEntries(new FormData(form).entries());
+
+      try {
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await response.json().catch(() => ({}));
+
+        if (response.ok) {
+          status.textContent = 'Published. Opening your project…';
+          window.location.href = `/projects/${result.slug}`;
+          return;
+        }
+
+        status.textContent = result.error || 'Something went wrong.';
+      } catch {
+        status.textContent = 'Network error. Please try again.';
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+</script>
