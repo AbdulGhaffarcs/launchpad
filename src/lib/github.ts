@@ -133,6 +133,16 @@ export async function createInstallationToken() {
   return token.token;
 }
 
+
+export async function getLaunchpadRepository(token: string) {
+  const owner = env('GITHUB_ORG');
+  const repo = env('GITHUB_REPO');
+  return githubFetch<GithubRepo>(`${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+}
+
 export async function getRepoContent(path: string) {
   const token = await createInstallationToken();
   const owner = env('GITHUB_ORG');

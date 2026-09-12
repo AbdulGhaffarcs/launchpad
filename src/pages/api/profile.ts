@@ -11,7 +11,9 @@ async function loadProfile(login:string){
 
 export const GET:APIRoute=async({cookies})=>{
   const session=await getSession(cookies);if(!session)return Response.json({error:'Sign in with GitHub first.'},{status:401});
-  const github=await getUser(session.accessToken); const profile=await loadProfile(session.login);
+  const github=await getUser(session.accessToken);
+  let profile: Record<string, unknown> = {};
+  try { profile = await loadProfile(session.login); } catch (error) { console.error('Could not load profile:', error); }
   return Response.json({github,profile});
 };
 

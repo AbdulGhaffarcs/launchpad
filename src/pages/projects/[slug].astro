@@ -68,6 +68,7 @@ const editable = !!session && (d.ownerLogin?.toLowerCase() === session.login.toL
       button.disabled = true;
       const response = await fetch('/api/star', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({slug}) });
       if (response.status === 401) { window.location.href = `/api/auth/github?next=${encodeURIComponent(window.location.pathname)}`; return; }
+      if (response.status === 403) { window.location.href = `/api/auth/github?next=${encodeURIComponent(window.location.pathname)}`; return; }
       const data = await response.json().catch(() => ({}));
       if (response.ok) { if (count) count.textContent = String(data.count ?? '—'); button.textContent = data.starred ? '★ Starred on GitHub' : '☆ Star repository'; }
       else hint.textContent = data.error ?? 'GitHub did not allow the star action.';

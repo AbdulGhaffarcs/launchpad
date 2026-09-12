@@ -8,9 +8,13 @@ export const prerender = false;
 const session = await getSession(Astro.cookies);
 if (!session) return Astro.redirect('/api/auth/github?next=/profile');
 const github = await getUser(session.accessToken);
-const file = await getRepoContent(`src/content/profiles/${session.login.toLowerCase()}.json`);
 let profile: Record<string,string> = {};
-if (file?.content) { try { profile = JSON.parse(Buffer.from(file.content,'base64').toString('utf8')); } catch {} }
+try {
+  const file = await getRepoContent(`src/content/profiles/${session.login.toLowerCase()}.json`);
+  if (file?.content) profile = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));
+} catch (error) {
+  console.error('Could not load Launchpad profile data:', error);
+}
 const projects = (await getCollection('projects')).filter(p => (p.data.ownerLogin ?? p.data.studentName).toLowerCase() === session.login.toLowerCase());
 ---
 <BaseLayout title="Profile">

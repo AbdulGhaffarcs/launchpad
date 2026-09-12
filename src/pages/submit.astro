@@ -17,7 +17,7 @@ const session = Astro.locals.session;
           <label class="span-2">GitHub repository <span class="muted small">optional</span>
             <input id="github" name="github" type="url" placeholder="https://github.com/you/project" autocomplete="url" />
           </label>
-          <div class="span-2" id="repo-status" class="form-status" aria-live="polite"></div>
+          <div id="repo-status" class="repo-status" aria-live="polite"></div>
           <label>Project name<input id="title" name="title" required maxlength="100" /></label>
           <label>Category<select name="category"><option>AI</option><option>Web</option><option>Mobile</option><option>Systems</option><option>Security</option><option>Data</option><option>Education</option><option>Developer Tools</option><option>Other</option></select></label>
           <label class="span-2">What does it do / why is it useful?<textarea id="description" name="description" required maxlength="1200" rows="6"></textarea></label>
@@ -55,7 +55,8 @@ const session = Astro.locals.session;
     async function hydrateRepo() {
       if (!github || !repoStatus) return;
       const url = github.value.trim();
-      if (!url || url === lastRepo) return;
+      if (!url) { repoStatus.textContent = ''; lastRepo = ''; return; }
+      if (url === lastRepo) return;
       lastRepo = url;
       repoStatus.textContent = 'Reading GitHub repository details…';
       try {
@@ -82,9 +83,9 @@ const session = Astro.locals.session;
         const response = await fetch('/api/projects', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(form).entries())) });
         const result = await response.json().catch(() => ({}));
         if (response.ok) {
-          status.textContent = 'Published. Vercel is rebuilding Launchpad now. The project will appear shortly.';
-          form.reset();
-          lastRepo = '';
+          status.textContent = 'Published. Opening your project…';
+          const target = result.slug ? `/projects/${encodeURIComponent(result.slug)}` : '/projects';
+          window.setTimeout(() => { window.location.href = target; }, 500);
           return;
         }
         status.textContent = result.error || 'Something went wrong.';

@@ -11,22 +11,28 @@ async function getProject(slug: string | null) {
 
 export const GET: APIRoute = async ({ url, cookies }) => {
   const project = await getProject(url.searchParams.get('slug'));
-  if (!project?.data.github) return Response.json({ error: 'Project has no GitHub repository.' }, { status: 404 });
+  if (!project?.data.github) return Response.json({ error: 'This project does not have a GitHub repository.' }, { status: 404 });
   const { owner, repo } = parseGithubUrl(project.data.github);
   const session = await getSession(cookies);
-  const repository = await getRepo(session?.accessToken ?? null, owner, repo).catch(() => null);
-  if (!repository) return Response.json({ error: 'GitHub repository is unavailable.' }, { status: 404 });
-  let starred = false;
-  if (session) starred = await isStarred(session.accessToken, owner, repo).catch(() => false);
-  return Response.json({ authenticated: !!session, starred, count: repository.stargazers_count });
+  try {
+    const repository = await getRepo(session?.accessToken ?? null, owner, repo);
+    let starred = false;
+    if (session) starred = await isStarred(session.accessToken, owner, repo);
+    return Response.json({ authenticated: !!session, starred, count: repository.stargazers_count });
+  } catch (error) {
+    console.error('Star GET failed:', error);
+    return Response.json({ error: 'GitHub activity is temporarily unavailable.' }, { status: 502 });
+  }
 };
 
 export const POST: APIRoute = async ({ request, cookies }) => {
   const session = await getSession(cookies);
-  if (!session) return Response.json({ error: 'Sign in with GitHub first.' }, { status: 401 });
+  if (!session) return Response.json({ error: 'Sign in with GitHub first.', code: 'AUTH_REQUIRED' }, { status: 401 });
+
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
   const project = await getProject(typeof body.slug === 'string' ? body.slug : null);
-  if (!project?.data.github) return Response.json({ error: 'Project has no GitHub repository.' }, { status: 404 });
+  if (!project?.data.github) return Response.json({ error: 'This project does not have a GitHub repository.' }, { status: 404 });
+
   const { owner, repo } = parseGithubUrl(project.data.github);
   try {
     const before = await isStarred(session.accessToken, owner, repo);
@@ -35,7 +41,14 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const repository = await getRepo(session.accessToken, owner, repo);
     return Response.json({ starred: after, count: repository.stargazers_count });
   } catch (error) {
-    console.error(error);
-    return Response.json({ error: 'GitHub denied the star action. Check the App Starring permission.' }, { status: 502 });
+    console.error('Star POST failed:', error);
+    const message = error instanceof Error ? error.message : '';
+    const permissionProblem = message.includes('403') || message.includes('Resource not accessible') || message.includes('insufficient');
+    return Response.json({
+      error: permissionProblem
+        ? 'GitHub has not granted Launchpad permission to manage stars for your account. Re-authorize Launchpad after enabling the App Starring permission.'
+        : 'GitHub could not complete the star action right now.',
+      code: permissionProblem ? 'STAR_PERMISSION_REQUIRED' : 'STAR_FAILED',
+    }, { status: permissionProblem ? 403 : 502 });
   }
 };

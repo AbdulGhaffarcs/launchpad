@@ -9,38 +9,42 @@ const session = Astro.locals.session;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#0a0b0d" />
-    <title>{title} · Launchpad</title>
+    <meta name="theme-color" content="#09090b" />
     <link rel="icon" href="/launchpad-logo.png" />
+    <title>{title} · Launchpad</title>
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="/" aria-label="Launchpad home">
-        <img class="brand-logo" src="/launchpad-logo.png" alt="" />
-        <span>Launchpad</span>
-      </a>
-      <nav class="site-nav" aria-label="Primary navigation">
-        <a href="/projects">Projects</a>
-        <a href="/submit">Submit</a>
-        {session ? (
-          <>
-            <a class="nav-user" href="/profile">
-              <img class="nav-avatar" src={session.avatarUrl} alt="" />
-              <span>Profile</span>
-            </a>
-            <form class="nav-form" method="post" action="/api/auth/logout">
-              <button type="submit">Sign out</button>
-            </form>
-          </>
-        ) : (
-          <a href="/api/auth/github">Sign in with GitHub</a>
-        )}
-      </nav>
+      <div class="nav-shell">
+        <a class="brand" href="/" aria-label="Launchpad home">
+          <span class="brand-icon"><img src="/launchpad-logo.png" alt="" /></span>
+          <span>Launchpad</span>
+        </a>
+        <nav class="site-nav" aria-label="Primary navigation">
+          <a class="nav-link" href="/projects">Projects</a>
+          <a class="nav-link nav-submit" href="/submit"><span>Submit</span><span class="nav-plus">+</span></a>
+          {session ? (
+            <>
+              <a class="nav-profile" href="/profile">
+                <img src={session.avatarUrl} alt="" />
+                <span>Profile</span>
+              </a>
+              <form method="post" action="/api/auth/logout" class="nav-form">
+                <button class="nav-link nav-logout" type="submit">Sign out</button>
+              </form>
+            </>
+          ) : (
+            <a class="nav-link nav-login" href="/api/auth/github">Sign in with GitHub <span>↗</span></a>
+          )}
+        </nav>
+      </div>
     </header>
     <main><slot /></main>
-    <footer>
-      <span>Launchpad · projects built by IBA CS students</span>
-      <a href="https://github.com/IBA-Launchpad/launchpad" target="_blank" rel="noopener noreferrer">Open source ↗</a>
+    <footer class="site-footer">
+      <div class="footer-shell">
+        <span>Launchpad · projects built by IBA CS students</span>
+        <a href="https://github.com/IBA-Launchpad/launchpad" target="_blank" rel="noopener noreferrer">Open source ↗</a>
+      </div>
     </footer>
   </body>
 </html>
