@@ -53,10 +53,10 @@ const editable = !!session && (d.ownerLogin?.toLowerCase() === session.login.toL
         {githubUrl && <a class="button secondary full" href={githubUrl} target="_blank" rel="noopener noreferrer">GitHub ↗</a>}
         {d.demo && <a class="button primary full" href={d.demo} target="_blank" rel="noopener noreferrer">Live demo ↗</a>}
         {githubUrl && (
-          <div class="star-box">
-            <div class="star-count"><strong>{stars ?? '—'}</strong> GitHub stars</div>
-            <a class="button accent full" href={githubUrl} target="_blank" rel="noopener noreferrer">Star on GitHub ↗</a>
-            <p class="muted small">Stars are handled by GitHub. Launchpad never asks for permission to modify your repositories.</p>
+          <div class="star-box" data-slug={project.id}>
+            <div class="star-count"><strong id="star-count">{stars ?? '—'}</strong> GitHub stars</div>
+            <button id="star-button" class="button accent full" type="button">☆ Star on GitHub</button>
+            <p id="star-hint" class="muted small">Sign in with GitHub to star it directly from Launchpad.</p>
           </div>
         )}
         {editable && <a class="button secondary full" href={`/projects/${project.id}/edit`}>Edit project</a>}
@@ -65,3 +65,64 @@ const editable = !!session && (d.ownerLogin?.toLowerCase() === session.login.toL
     </div>
   </section>
 </BaseLayout>
+<script>
+  const box = document.querySelector<HTMLElement>('.star-box');
+  const button = document.querySelector<HTMLButtonElement>('#star-button');
+  const count = document.querySelector<HTMLElement>('#star-count');
+  const hint = document.querySelector<HTMLElement>('#star-hint');
+  const slug = box?.dataset.slug;
+
+  async function refreshStarState() {
+    if (!button || !count || !hint || !slug) return;
+    try {
+      const response = await fetch(`/api/star?slug=${encodeURIComponent(slug)}`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        hint.textContent = data.error ?? 'GitHub stars are unavailable right now.';
+        return;
+      }
+      count.textContent = String(data.count ?? '—');
+      button.textContent = data.starred ? '★ Starred on GitHub' : '☆ Star on GitHub';
+      hint.textContent = data.authenticated
+        ? 'Uses your GitHub account. Your session stays on this device.'
+        : 'Sign in with GitHub to star it directly from Launchpad.';
+    } catch {
+      hint.textContent = 'Could not load GitHub star status.';
+    }
+  }
+
+  button?.addEventListener('click', async () => {
+    if (!button || !hint || !slug) return;
+    button.disabled = true;
+    hint.textContent = 'Updating GitHub…';
+
+    try {
+      const response = await fetch('/api/star', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug }),
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 401 || (response.status === 403 && data.reauthorize)) {
+        window.location.href = `/api/auth/github?next=${encodeURIComponent(window.location.pathname)}&reauthorize=1`;
+        return;
+      }
+
+      if (!response.ok) {
+        hint.textContent = data.error ?? 'GitHub did not allow the action.';
+        return;
+      }
+
+      count!.textContent = String(data.count ?? '—');
+      button.textContent = data.starred ? '★ Starred on GitHub' : '☆ Star on GitHub';
+      hint.textContent = data.starred ? 'Star added to the repository.' : 'Star removed from the repository.';
+    } catch {
+      hint.textContent = 'Network error. Try again.';
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  void refreshStarState();
+</script>

@@ -8,8 +8,8 @@ function base64url(value: Buffer) {
 }
 
 export const GET: APIRoute = ({ cookies, url, redirect }) => {
-  const clientId = import.meta.env.GITHUB_CLIENT_ID ?? process.env.GITHUB_CLIENT_ID;
-  if (!clientId) return new Response('Missing GITHUB_CLIENT_ID', { status: 500 });
+  const clientId = import.meta.env.GITHUB_OAUTH_CLIENT_ID ?? process.env.GITHUB_OAUTH_CLIENT_ID;
+  if (!clientId) return new Response('Missing GITHUB_OAUTH_CLIENT_ID', { status: 500 });
 
   const state = base64url(crypto.randomBytes(32));
   const verifier = base64url(crypto.randomBytes(32));
@@ -25,6 +25,7 @@ export const GET: APIRoute = ({ cookies, url, redirect }) => {
   auth.searchParams.set('state', state);
   auth.searchParams.set('code_challenge', challenge);
   auth.searchParams.set('code_challenge_method', 'S256');
+  auth.searchParams.set('scope', 'public_repo');
   auth.searchParams.set('allow_signup', 'true');
 
   return redirect(auth.toString(), 302);

@@ -2,14 +2,14 @@
 title: "DevShelf"
 studentName: "qasimio"
 ownerLogin: "qasimio"
-github: "https://github.com/qasimio/DevShelf"
-demo: "https://qasimio.me/projects/devshelf"
-linkedin: "https://linkedin.com/in/qasimio"
+github: "https://github.com/qasimio/MQNotebook"
+demo: null
+linkedin: null
 description: "Google, But Only for Computer Science Books"
 stack: ["Java","clean-code","desktop-app","devshelf","digital-library","distributed-system","dsa","information-retrieval","java","javafx","library","open-source"]
-lookingFor: ["Users","Feedback","Contributors"]
+lookingFor: []
 category: "AI"
-date: "2026-09-12T18:59:06.516Z"
+date: "2026-09-12T19:40:38.478Z"
 featured: false
 privateRepo: false
 ---

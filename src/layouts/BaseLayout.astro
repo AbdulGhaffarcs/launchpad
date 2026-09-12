@@ -18,23 +18,23 @@ const session = Astro.locals.session;
       <div class="nav-shell">
         <a class="brand" href="/" aria-label="Launchpad home">
           <span class="brand-icon"><img src="/launchpad-logo.png" alt="" /></span>
-          <span>Launchpad</span>
+          <span class="brand-word">Launchpad</span>
         </a>
         <nav class="site-nav" aria-label="Primary navigation">
-          <a class="nav-button" href="/projects">Projects</a>
-          {session && <a class="nav-button nav-submit" href="/submit">Submit <span class="nav-plus">+</span></a>}
+          <a class="nav-link" href="/projects">Projects</a>
+          {session && <a class="nav-link nav-submit" href="/submit">Submit <span>+</span></a>}
           {session ? (
             <>
-              <a class="nav-profile" href="/profile">
+              <a class="nav-profile" href="/profile" aria-label={`Open ${session.login} profile`}>
                 <img src={session.avatarUrl} alt="" />
                 <span>Profile</span>
               </a>
               <form method="post" action="/api/auth/logout" class="nav-form">
-                <button class="nav-button" type="submit">Sign out</button>
+                <button class="nav-link nav-signout" type="submit">Sign out</button>
               </form>
             </>
           ) : (
-            <a class="nav-button nav-login" href="/api/auth/github">Sign in with GitHub <span>↗</span></a>
+            <a class="nav-link nav-login" href="/api/auth/github">Sign in with GitHub <span>↗</span></a>
           )}
         </nav>
       </div>
