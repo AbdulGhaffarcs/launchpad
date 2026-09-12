@@ -7,18 +7,14 @@ import { safeNext } from '../../../../lib/utils';
 export const GET: APIRoute = async ({ cookies, url, redirect }) => {
   const error = url.searchParams.get('error');
   if (error) return new Response(`GitHub authorization failed: ${error}`, { status: 400 });
-
   const code = url.searchParams.get('code');
   const incomingState = url.searchParams.get('state');
   const { state, next } = consumeOAuthState(cookies);
-
-  if (!code || !incomingState || !state || !crypto.timingSafeEqual(Buffer.from(incomingState), Buffer.from(state))) {
-    return new Response('Invalid OAuth state.', { status: 400 });
-  }
-
+  if (!code || !incomingState || !state) return new Response('Invalid OAuth state.', { status: 400 });
+  const a = Buffer.from(incomingState); const b = Buffer.from(state);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return new Response('Invalid OAuth state.', { status: 400 });
   try {
-    const redirectUri = `${url.origin}/api/auth/github/callback`;
-    const oauth = await exchangeCode(code, redirectUri);
+    const oauth = await exchangeCode(code, `${url.origin}/api/auth/github/callback`);
     const user = await getUser(oauth.access_token);
     await sessionFromGithubUser(cookies, user, oauth);
     return redirect(safeNext(next), 302);

@@ -1,17 +1,26 @@
 # IBA Launchpad
 
-Public showcase of projects built by the IBA CS community.
+Public project showcase for the IBA CS builder community.
 
-## Features
+## Local
 
-- Public browsing without login.
-- Persistent GitHub login for actions.
-- Submit projects without making students contribute to this repository.
-- GitHub repository verification, including private repositories when the authorized user can access them.
-- Real GitHub stars from the website.
-- Project files live in this repository; submissions create files automatically through the GitHub App.
-- A GitHub push triggers the normal Vercel deployment automatically.
+```powershell
+npm install
+npm run check
+npm run build
+npm run dev
+```
 
-## Stack
+## Runtime setup
 
-Astro 7 + Vercel SSR + GitHub App + GitHub REST API + GitHub Actions + TypeScript + Zod + JOSE.
+The deployed app uses Vercel's Astro server adapter. GitHub App credentials are server-side environment variables only.
+
+Required variables are listed in `.env.example`.
+
+GitHub App callback:
+
+`https://YOUR-DOMAIN/api/auth/github/callback`
+
+The app uses GitHub user authorization for sign-in and real GitHub starring, and a GitHub App installation token for writing project/profile records into the Launchpad repository.
+
+Students never need to fork the Launchpad repo or create pull requests. A submission is published as a repository file by the server, then Vercel rebuilds the site automatically.

@@ -18,10 +18,13 @@ export type GithubUser = {
   login: string;
   avatar_url: string;
   name: string | null;
+  bio?: string | null;
   html_url: string;
+  blog?: string | null;
 };
 
 export type GithubRepo = {
+  id: number;
   full_name: string;
   name: string;
   html_url: string;
@@ -32,6 +35,7 @@ export type GithubRepo = {
   topics?: string[];
   owner: { login: string };
 };
+
 
 async function githubFetch<T>(url: string, init: RequestInit = {}) {
   const response = await fetch(url, {
@@ -53,10 +57,7 @@ async function githubFetch<T>(url: string, init: RequestInit = {}) {
 export async function exchangeCode(code: string, redirectUri: string) {
   const response = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: env('GITHUB_CLIENT_ID'),
       client_secret: env('GITHUB_CLIENT_SECRET'),
@@ -66,21 +67,13 @@ export async function exchangeCode(code: string, redirectUri: string) {
   });
   const data = await response.json();
   if (!response.ok || data.error) throw new Error(data.error_description ?? data.error ?? 'GitHub OAuth failed');
-  return data as {
-    access_token: string;
-    expires_in?: number;
-    refresh_token?: string;
-    refresh_token_expires_in?: number;
-  };
+  return data as { access_token: string; expires_in?: number; refresh_token?: string; refresh_token_expires_in?: number };
 }
 
 export async function refreshUserToken(refreshToken: string) {
   const response = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: env('GITHUB_CLIENT_ID'),
       client_secret: env('GITHUB_CLIENT_SECRET'),
@@ -90,18 +83,11 @@ export async function refreshUserToken(refreshToken: string) {
   });
   const data = await response.json();
   if (!response.ok || data.error) throw new Error(data.error_description ?? data.error ?? 'GitHub token refresh failed');
-  return data as {
-    access_token: string;
-    expires_in: number;
-    refresh_token?: string;
-    refresh_token_expires_in?: number;
-  };
+  return data as { access_token: string; expires_in: number; refresh_token?: string; refresh_token_expires_in?: number };
 }
 
 export async function getUser(accessToken: string) {
-  return githubFetch<GithubUser>(`${API}/user`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  return githubFetch<GithubUser>(`${API}/user`, { headers: { Authorization: `Bearer ${accessToken}` } });
 }
 
 export async function getRepo(accessToken: string | null, owner: string, repo: string) {
@@ -113,11 +99,7 @@ export async function getRepo(accessToken: string | null, owner: string, repo: s
 
 export async function isStarred(accessToken: string, owner: string, repo: string) {
   const response = await fetch(`${API}/user/starred/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': VERSION,
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': VERSION, Authorization: `Bearer ${accessToken}` },
   });
   if (response.status === 204) return true;
   if (response.status === 404) return false;
@@ -127,20 +109,14 @@ export async function isStarred(accessToken: string, owner: string, repo: string
 export async function setStar(accessToken: string, owner: string, repo: string, starred: boolean) {
   return githubFetch<null>(`${API}/user/starred/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
     method: starred ? 'PUT' : 'DELETE',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Length': '0' },
   });
-}
-
-function toPem(value: string) {
-  return normalizePrivateKey(value);
 }
 
 export async function createInstallationToken() {
   const appId = env('GITHUB_APP_ID');
   const installationId = env('GITHUB_INSTALLATION_ID');
-  const privateKey = toPem(env('GITHUB_PRIVATE_KEY'));
+  const privateKey = normalizePrivateKey(env('GITHUB_PRIVATE_KEY'));
   const key = createPrivateKey({ key: privateKey, format: 'pem' });
   const now = Math.floor(Date.now() / 1000);
   const jwt = await new SignJWT({})
@@ -157,14 +133,47 @@ export async function createInstallationToken() {
   return token.token;
 }
 
-export async function createProjectFile(path: string, content: string, message: string) {
+export async function getRepoContent(path: string) {
   const token = await createInstallationToken();
-  const encoded = Buffer.from(content, 'utf8').toString('base64');
   const owner = env('GITHUB_ORG');
   const repo = env('GITHUB_REPO');
+  const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+  try {
+    return await githubFetch<{ sha: string; content?: string; encoding?: string }>(`${API}/repos/${owner}/${repo}/contents/${encodedPath}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('GitHub API 404')) return null;
+    throw error;
+  }
+}
+
+export async function createOrUpdateRepoFile(path: string, content: string, message: string) {
+  const token = await createInstallationToken();
+  const owner = env('GITHUB_ORG');
+  const repo = env('GITHUB_REPO');
+  const current = await getRepoContent(path);
+  const encoded = Buffer.from(content, 'utf8').toString('base64');
+  const body: Record<string, string> = { message, content: encoded };
+  if (current?.sha) body.sha = current.sha;
+
   return githubFetch(`${API}/repos/${owner}/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, content: encoded }),
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteRepoFile(path: string, message: string) {
+  const token = await createInstallationToken();
+  const owner = env('GITHUB_ORG');
+  const repo = env('GITHUB_REPO');
+  const current = await getRepoContent(path);
+  if (!current?.sha) return null;
+  return githubFetch(`${API}/repos/${owner}/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, sha: current.sha }),
   });
 }

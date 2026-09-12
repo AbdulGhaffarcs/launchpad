@@ -1,0 +1,67 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+export const prerender = false;
+const { slug } = Astro.params;
+const project = (await getCollection('projects')).find((p) => p.id === slug);
+const session = Astro.locals.session;
+if (!project || !session) return Astro.redirect(project ? `/api/auth/github?next=/projects/${slug}/edit` : '/projects');
+const d = project.data;
+const owner = d.ownerLogin?.toLowerCase() === session.login.toLowerCase() || d.studentName.toLowerCase() === session.login.toLowerCase();
+if (!owner) return Astro.redirect(`/projects/${slug}`);
+---
+<BaseLayout title={`Edit ${d.title}`}>
+  <section class="submit-page">
+    <a class="back" href={`/projects/${slug}`}>← Back to project</a>
+    <p class="eyebrow" style="margin-top:40px">PROJECT SETTINGS</p>
+    <h1>Edit your project.</h1>
+    <p class="submit-copy">Changes are committed to the Launchpad repository and the live site rebuilds automatically.</p>
+    <form id="edit-form" class="form-card" data-slug={slug}>
+      <div class="form-grid">
+        <label class="span-2">Project name<input name="title" value={d.title} required maxlength="100" /></label>
+        <label>Category<select name="category">
+          {['AI','Web','Mobile','Systems','Security','Data','Education','Developer Tools','Other'].map((x) => <option selected={x === d.category}>{x}</option>)}
+        </select></label>
+        <label>GitHub<input name="github" type="url" value={d.github ?? ''} /></label>
+        <label class="span-2">What does it do / why is it useful?<textarea name="description" rows="7" required maxlength="1200">{d.description}</textarea></label>
+        <label>Demo / website<input name="demo" type="url" value={d.demo ?? ''} /></label>
+        <label>LinkedIn<input name="linkedin" type="url" value={d.linkedin ?? ''} /></label>
+        <label class="span-2">Tech stack<input name="stack" value={d.stack.join(', ')} /></label>
+        <label class="span-2">Looking for<input name="lookingFor" value={d.lookingFor.join(', ')} /></label>
+      </div>
+      <div class="form-actions">
+        <button id="save" class="button primary" type="submit">Save changes</button>
+        <a class="button secondary" href={`/projects/${slug}`}>Cancel</a>
+        <button id="delete" class="button danger" type="button">Delete project</button>
+      </div>
+      <p id="status" class="form-status" aria-live="polite"></p>
+    </form>
+  </section>
+</BaseLayout>
+<script>
+  const form = document.querySelector<HTMLFormElement>('#edit-form');
+  if (form) {
+    const slug = form.dataset.slug;
+    const save = document.querySelector<HTMLButtonElement>('#save');
+    const del = document.querySelector<HTMLButtonElement>('#delete');
+    const status = document.querySelector<HTMLElement>('#status');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); if (!slug || !save || !status) return;
+      save.disabled = true; status.textContent = 'Saving…';
+      const response = await fetch(`/api/projects/${encodeURIComponent(slug)}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});
+      const data = await response.json().catch(()=>({}));
+      status.textContent = response.ok ? 'Saved. The live site is rebuilding now.' : (data.error ?? 'Could not save.');
+      save.disabled = false;
+    });
+    del?.addEventListener('click', async () => {
+      if (!slug || !del || !status) return;
+      if (!confirm('Delete this Launchpad project? The creator repository will not be changed.')) return;
+      del.disabled = true; status.textContent = 'Deleting…';
+      const response = await fetch(`/api/projects/${encodeURIComponent(slug)}`, {method:'DELETE'});
+      const data = await response.json().catch(()=>({}));
+      if (response.ok) { window.location.href = '/projects'; return; }
+      status.textContent = data.error ?? 'Could not delete.'; del.disabled = false;
+    });
+  }
+</script>

@@ -20,11 +20,7 @@ type Session = JWTPayload & {
 };
 
 export async function sealSession(data: Omit<Session, 'iat' | 'exp'>) {
-  return new SignJWT(data)
-    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-    .setIssuedAt()
-    .setExpirationTime('30d')
-    .sign(secret());
+  return new SignJWT(data).setProtectedHeader({ alg: 'HS256', typ: 'JWT' }).setIssuedAt().setExpirationTime('180d').sign(secret());
 }
 
 export async function readSession(cookieValue: string | undefined) {
@@ -32,19 +28,15 @@ export async function readSession(cookieValue: string | undefined) {
   try {
     const { payload } = await jwtVerify(cookieValue, secret());
     return payload as Session;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export async function getSession(cookies: any) {
   const raw = cookies.get(COOKIE)?.value;
   const session = await readSession(raw);
   if (!session) return null;
-
-  if (session.expiresAt && session.expiresAt > Date.now() + 60_000) return session;
+  if (session.expiresAt > Date.now() + 60_000) return session;
   if (!session.refreshToken) return null;
-
   try {
     const refreshed = await refreshUserToken(session.refreshToken);
     const next = {
@@ -54,40 +46,22 @@ export async function getSession(cookies: any) {
       refreshToken: refreshed.refresh_token ?? session.refreshToken,
       expiresAt: Date.now() + refreshed.expires_in * 1000,
     };
-    const token = await sealSession(next);
-    cookies.set(COOKIE, token, {
-      httpOnly: true,
-      secure: import.meta.env.PROD,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 180,
-    });
+    setSession(cookies, await sealSession(next));
     return { ...session, ...next };
   } catch {
-    cookies.delete(COOKIE, { path: '/' });
+    clearSession(cookies);
     return null;
   }
 }
 
 export function setSession(cookies: any, token: string) {
-  cookies.set(COOKIE, token, {
-    httpOnly: true,
-    secure: import.meta.env.PROD,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 180,
-  });
+  cookies.set(COOKIE, token, { httpOnly: true, secure: import.meta.env.PROD, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 180 });
 }
-
-export function clearSession(cookies: any) {
-  cookies.delete(COOKIE, { path: '/' });
-}
-
+export function clearSession(cookies: any) { cookies.delete(COOKIE, { path: '/' }); }
 export function setOAuthState(cookies: any, state: string, next: string) {
   cookies.set(STATE_COOKIE, state, { httpOnly: true, secure: import.meta.env.PROD, sameSite: 'lax', path: '/', maxAge: 600 });
   cookies.set(NEXT_COOKIE, next, { httpOnly: true, secure: import.meta.env.PROD, sameSite: 'lax', path: '/', maxAge: 600 });
 }
-
 export function consumeOAuthState(cookies: any) {
   const state = cookies.get(STATE_COOKIE)?.value;
   const next = cookies.get(NEXT_COOKIE)?.value || '/';
@@ -95,14 +69,12 @@ export function consumeOAuthState(cookies: any) {
   cookies.delete(NEXT_COOKIE, { path: '/' });
   return { state, next };
 }
-
 export async function sessionFromGithubUser(cookies: any, user: GithubUser, oauth: { access_token: string; refresh_token?: string; expires_in?: number }) {
-  const token = await sealSession({
+  setSession(cookies, await sealSession({
     login: user.login,
     avatarUrl: user.avatar_url,
     accessToken: oauth.access_token,
     refreshToken: oauth.refresh_token,
     expiresAt: Date.now() + (oauth.expires_in ?? 28800) * 1000,
-  });
-  setSession(cookies, token);
+  }));
 }

@@ -2,33 +2,39 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 const session = Astro.locals.session;
 ---
-<BaseLayout title="Submit a project">
+<BaseLayout title="Submit" description="Showcase a project on Launchpad.">
   <section class="submit-page">
     <p class="eyebrow">PROJECT SHOWCASE</p>
     <h1>Put your work on Launchpad.</h1>
-    <p class="hero-copy">A GitHub repository is preferred, but it is not required. Sign in with GitHub to submit and to keep the same account across future visits.</p>
+    <p class="submit-copy">Tell us what you built. GitHub is preferred because Launchpad can pull the technical details automatically, but a GitHub repository is not required.</p>
     {session ? (
       <form id="submit-form" class="form-card">
-        <div class="signed-in"><img src={session.avatarUrl} alt="" /><span>Signed in as <strong>{session.login}</strong></span></div>
-        <label>Project name<input name="title" required maxlength="100" /></label>
-        <label>What does it do / why is it useful?<textarea name="description" required maxlength="1200" rows="5"></textarea></label>
-        <div class="two-col">
-          <label>GitHub repository<input name="github" type="url" placeholder="https://github.com/..." /></label>
-          <label>Demo / website<input name="demo" type="url" placeholder="https://..." /></label>
+        <div class="signed-in">
+          <img src={session.avatarUrl} alt="" />
+          <div><div>Signed in as <strong>{session.login}</strong></div><span class="muted small">Your Launchpad session is saved on this device.</span></div>
         </div>
-        <div class="two-col">
-          <label>LinkedIn<input name="linkedin" type="url" placeholder="https://linkedin.com/in/..." /></label>
+        <div class="form-grid">
+          <label class="span-2">GitHub repository <span class="muted small">optional</span>
+            <input id="github" name="github" type="url" placeholder="https://github.com/you/project" autocomplete="url" />
+          </label>
+          <div class="span-2" id="repo-status" class="form-status" aria-live="polite"></div>
+          <label>Project name<input id="title" name="title" required maxlength="100" /></label>
           <label>Category<select name="category"><option>AI</option><option>Web</option><option>Mobile</option><option>Systems</option><option>Security</option><option>Data</option><option>Education</option><option>Developer Tools</option><option>Other</option></select></label>
+          <label class="span-2">What does it do / why is it useful?<textarea id="description" name="description" required maxlength="1200" rows="6"></textarea></label>
+          <label>Demo / website<input name="demo" type="url" placeholder="https://..." autocomplete="url" /></label>
+          <label>LinkedIn<input name="linkedin" type="url" placeholder="https://linkedin.com/in/..." autocomplete="url" /></label>
+          <label class="span-2">Tech stack<input id="stack" name="stack" placeholder="React, Python, Supabase" /></label>
+          <label class="span-2">Looking for<input name="lookingFor" placeholder="Users, Feedback, Contributors" /></label>
         </div>
-        <label>Tech stack<input name="stack" placeholder="React, Python, Supabase" /></label>
-        <label>Looking for<input name="lookingFor" placeholder="Users, Feedback, Contributors" /></label>
-        <button class="button primary full" type="submit">Publish to Launchpad</button>
-        <p id="form-status" class="form-status"></p>
+        <div class="form-actions">
+          <button id="submit-button" class="button primary" type="submit">Publish to Launchpad</button>
+        </div>
+        <p id="form-status" class="form-status" aria-live="polite"></p>
       </form>
     ) : (
       <div class="login-card">
-        <h2>One sign-in. Then you're done.</h2>
-        <p>Browsing is public. Submission and GitHub actions use your GitHub account, with a persistent Launchpad session so you don't keep signing in.</p>
+        <h2>Sign in once.</h2>
+        <p>Browsing is public. Submission, project editing and GitHub actions use your GitHub account. Launchpad keeps the session so you don't sign in on every visit.</p>
         <a class="button primary" href="/api/auth/github?next=/submit">Continue with GitHub</a>
       </div>
     )}
@@ -36,39 +42,54 @@ const session = Astro.locals.session;
 </BaseLayout>
 <script>
   const form = document.querySelector<HTMLFormElement>('#submit-form');
-
   if (form) {
-    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const github = document.querySelector<HTMLInputElement>('#github');
+    const title = document.querySelector<HTMLInputElement>('#title');
+    const description = document.querySelector<HTMLTextAreaElement>('#description');
+    const stack = document.querySelector<HTMLInputElement>('#stack');
+    const repoStatus = document.querySelector<HTMLElement>('#repo-status');
+    const button = document.querySelector<HTMLButtonElement>('#submit-button');
     const status = document.querySelector<HTMLElement>('#form-status');
+
+    let lastRepo = '';
+    async function hydrateRepo() {
+      if (!github || !repoStatus) return;
+      const url = github.value.trim();
+      if (!url || url === lastRepo) return;
+      lastRepo = url;
+      repoStatus.textContent = 'Reading GitHub repository details…';
+      try {
+        const response = await fetch(`/api/github/repo?url=${encodeURIComponent(url)}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) { repoStatus.textContent = data.error ?? 'GitHub details unavailable. You can still submit without verification.'; return; }
+        if (title && !title.value) title.value = data.name ?? '';
+        if (description && !description.value) description.value = data.description ?? '';
+        if (stack && !stack.value) stack.value = [data.language, ...(data.topics ?? [])].filter(Boolean).join(', ');
+        repoStatus.textContent = `GitHub connected · ${data.private ? 'private repository' : `${data.stars ?? 0} stars`}`;
+      } catch {
+        repoStatus.textContent = 'Could not reach GitHub. You can still publish the project.';
+      }
+    }
+    github?.addEventListener('blur', hydrateRepo);
+    github?.addEventListener('change', hydrateRepo);
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!button || !status) return;
-
       button.disabled = true;
       status.textContent = 'Publishing…';
-      const data = Object.fromEntries(new FormData(form).entries());
-
       try {
-        const response = await fetch('/api/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
+        const response = await fetch('/api/projects', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(form).entries())) });
         const result = await response.json().catch(() => ({}));
-
         if (response.ok) {
-          status.textContent = 'Published. Opening your project…';
-          window.location.href = `/projects/${result.slug}`;
+          status.textContent = 'Published. Vercel is rebuilding Launchpad now. The project will appear shortly.';
+          form.reset();
+          lastRepo = '';
           return;
         }
-
         status.textContent = result.error || 'Something went wrong.';
-      } catch {
-        status.textContent = 'Network error. Please try again.';
-      } finally {
-        button.disabled = false;
-      }
+      } catch { status.textContent = 'Network error. Please try again.'; }
+      finally { button.disabled = false; }
     });
   }
 </script>

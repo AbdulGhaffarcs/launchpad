@@ -7,7 +7,7 @@ const data = project.data;
 <article class="project-card">
   <div class="card-topline">
     <span>{data.category}</span>
-    {data.featured && <span class="featured-badge">Featured</span>}
+    {data.featured && <span class="badge accent">Featured</span>}
   </div>
   <h3><a href={`/projects/${project.id}`}>{data.title}</a></h3>
   <p>{data.description}</p>
@@ -15,7 +15,7 @@ const data = project.data;
     {data.stack.slice(0, 5).map((item) => <span>{item}</span>)}
   </div>
   <div class="card-footer">
-    <span>{data.studentName}</span>
+    <span>by {data.studentName}</span>
     <a href={`/projects/${project.id}`}>View project →</a>
   </div>
 </article>
