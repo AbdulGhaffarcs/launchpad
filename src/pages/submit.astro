@@ -1,41 +1,56 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 const session = Astro.locals.session;
+const categories = ['AI','Web','Mobile','Systems','Security','Data','Education','Developer Tools','Other'];
 ---
 <BaseLayout title="Submit" description="Showcase a project on Launchpad.">
   <section class="submit-page">
-    <p class="eyebrow">PROJECT SHOWCASE</p>
-    <h1>Put your work on Launchpad.</h1>
-    <p class="submit-copy">Tell us what you built. GitHub is preferred because Launchpad can pull the technical details automatically, but a GitHub repository is not required.</p>
+    <div class="page-intro">
+      <p class="eyebrow">PROJECT SHOWCASE</p>
+      <h1>Put your work on Launchpad.</h1>
+      <p class="submit-copy">Give your project a permanent place in the community archive. GitHub is preferred because Launchpad can fill in technical details automatically.</p>
+    </div>
+
     {session ? (
       <form id="submit-form" class="form-card">
         <div class="signed-in">
           <img src={session.avatarUrl} alt="" />
-          <div><div>Signed in as <strong>{session.login}</strong></div><span class="muted small">Your Launchpad session is saved on this device.</span></div>
+          <div><strong>{session.login}</strong><span>Signed in with GitHub · session saved on this device</span></div>
         </div>
+
         <div class="form-grid">
-          <label class="span-2">GitHub repository <span class="muted small">optional</span>
+          <div class="field span-2">
+            <label for="github">GitHub repository <small>optional</small></label>
             <input id="github" name="github" type="url" placeholder="https://github.com/you/project" autocomplete="url" />
-          </label>
-          <div id="repo-status" class="repo-status" aria-live="polite"></div>
-          <label>Project name<input id="title" name="title" required maxlength="100" /></label>
-          <label>Category<select name="category"><option>AI</option><option>Web</option><option>Mobile</option><option>Systems</option><option>Security</option><option>Data</option><option>Education</option><option>Developer Tools</option><option>Other</option></select></label>
-          <label class="span-2">What does it do / why is it useful?<textarea id="description" name="description" required maxlength="1200" rows="6"></textarea></label>
-          <label>Demo / website<input name="demo" type="url" placeholder="https://..." autocomplete="url" /></label>
-          <label>LinkedIn<input name="linkedin" type="url" placeholder="https://linkedin.com/in/..." autocomplete="url" /></label>
-          <label class="span-2">Tech stack<input id="stack" name="stack" placeholder="React, Python, Supabase" /></label>
-          <label class="span-2">Looking for<input name="lookingFor" placeholder="Users, Feedback, Contributors" /></label>
+            <p class="field-note">Public repositories are linked automatically. For a private repository, tick the private option and Launchpad will never publish its URL.</p>
+          </div>
+
+          <div class="repo-tools span-2">
+            <label class="check-row"><input id="privateRepo" name="privateRepo" type="checkbox" value="true" /><span>This repository is private</span></label>
+            <div id="repo-status" class="repo-status" aria-live="polite">Paste a GitHub URL and leave the field to fetch details.</div>
+          </div>
+
+          <div class="field"><label for="title">Project name</label><input id="title" name="title" required maxlength="100" placeholder="e.g. DevShelf" /></div>
+          <div class="field"><label for="category">Category</label><select id="category" name="category">{categories.map((category) => <option>{category}</option>)}</select></div>
+          <div class="field span-2"><label for="description">What does it do / why is it useful?</label><textarea id="description" name="description" required maxlength="1200" rows="7" placeholder="Explain the problem, what you built, and why someone should care."></textarea></div>
+          <div class="field"><label for="demo">Demo / website <small>optional</small></label><input id="demo" name="demo" type="url" placeholder="https://..." /></div>
+          <div class="field"><label for="linkedin">LinkedIn <small>optional</small></label><input id="linkedin" name="linkedin" type="url" placeholder="https://linkedin.com/in/..." /></div>
+          <div class="field span-2"><label for="stack">Tech stack</label><input id="stack" name="stack" placeholder="React, Python, Supabase" /></div>
+          <div class="field span-2"><label for="lookingFor">Looking for <small>optional</small></label><input id="lookingFor" name="lookingFor" placeholder="Users, Feedback, Contributors" /></div>
         </div>
-        <div class="form-actions">
+
+        <div class="form-actions submit-actions">
           <button id="submit-button" class="button primary" type="submit">Publish to Launchpad</button>
+          <a class="button ghost" href="/projects">Cancel</a>
         </div>
-        <p id="form-status" class="form-status" aria-live="polite"></p>
+        <div id="form-status" class="notice" aria-live="polite"></div>
       </form>
     ) : (
       <div class="login-card">
-        <h2>Sign in once.</h2>
-        <p>Browsing is public. Submission, project editing and GitHub actions use your GitHub account. Launchpad keeps the session so you don't sign in on every visit.</p>
-        <a class="button primary" href="/api/auth/github?next=/submit">Continue with GitHub</a>
+        <p class="eyebrow">ONE-TIME SETUP</p>
+        <h2>Sign in with GitHub.</h2>
+        <p>Browsing is public. Submission and project ownership use your GitHub account. Once connected, Launchpad keeps your session on this device.</p>
+        <a class="button primary" href="/api/auth/github?next=/submit">Continue with GitHub ↗</a>
       </div>
     )}
   </section>
@@ -44,52 +59,52 @@ const session = Astro.locals.session;
   const form = document.querySelector<HTMLFormElement>('#submit-form');
   if (form) {
     const github = document.querySelector<HTMLInputElement>('#github');
+    const privateRepo = document.querySelector<HTMLInputElement>('#privateRepo');
     const title = document.querySelector<HTMLInputElement>('#title');
     const description = document.querySelector<HTMLTextAreaElement>('#description');
     const stack = document.querySelector<HTMLInputElement>('#stack');
     const repoStatus = document.querySelector<HTMLElement>('#repo-status');
     const button = document.querySelector<HTMLButtonElement>('#submit-button');
     const status = document.querySelector<HTMLElement>('#form-status');
+    let timer: number | undefined;
 
-    let lastRepo = '';
     async function hydrateRepo() {
-      if (!github || !repoStatus) return;
-      const url = github.value.trim();
-      if (!url) { repoStatus.textContent = ''; lastRepo = ''; return; }
-      if (url === lastRepo) return;
-      lastRepo = url;
-      repoStatus.textContent = 'Reading GitHub repository details…';
+      if (!github || !repoStatus || privateRepo?.checked) return;
+      const value = github.value.trim();
+      if (!value) { repoStatus.textContent = 'Paste a GitHub URL and leave the field to fetch details.'; return; }
+      repoStatus.textContent = 'Fetching repository details…';
       try {
-        const response = await fetch(`/api/github/repo?url=${encodeURIComponent(url)}`);
+        const response = await fetch(`/api/github/repo?url=${encodeURIComponent(value)}`);
         const data = await response.json().catch(() => ({}));
-        if (!response.ok) { repoStatus.textContent = data.error ?? 'GitHub details unavailable. You can still submit without verification.'; return; }
+        if (!response.ok) { repoStatus.textContent = data.message ?? data.error ?? 'Repository details unavailable.'; return; }
         if (title && !title.value) title.value = data.name ?? '';
         if (description && !description.value) description.value = data.description ?? '';
         if (stack && !stack.value) stack.value = [data.language, ...(data.topics ?? [])].filter(Boolean).join(', ');
-        repoStatus.textContent = `GitHub connected · ${data.private ? 'private repository' : `${data.stars ?? 0} stars`}`;
-      } catch {
-        repoStatus.textContent = 'Could not reach GitHub. You can still publish the project.';
-      }
+        repoStatus.innerHTML = `<strong>${data.name}</strong> · ${data.owner} · ${data.stars ?? 0} GitHub stars`;
+      } catch { repoStatus.textContent = 'Could not reach GitHub right now.'; }
     }
+
+    github?.addEventListener('input', () => { window.clearTimeout(timer); timer = window.setTimeout(hydrateRepo, 500); });
     github?.addEventListener('blur', hydrateRepo);
-    github?.addEventListener('change', hydrateRepo);
+    privateRepo?.addEventListener('change', () => {
+      if (privateRepo.checked) repoStatus!.textContent = 'Private repository selected. Its URL will not be published on Launchpad.';
+      else void hydrateRepo();
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       if (!button || !status) return;
       button.disabled = true;
+      status.className = 'notice loading';
       status.textContent = 'Publishing…';
       try {
-        const response = await fetch('/api/projects', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(Object.fromEntries(new FormData(form).entries())) });
+        const response = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(form).entries())) });
         const result = await response.json().catch(() => ({}));
-        if (response.ok) {
-          status.textContent = 'Published. Opening your project…';
-          const target = result.slug ? `/projects/${encodeURIComponent(result.slug)}` : '/projects';
-          window.setTimeout(() => { window.location.href = target; }, 500);
-          return;
-        }
-        status.textContent = result.error || 'Something went wrong.';
-      } catch { status.textContent = 'Network error. Please try again.'; }
+        if (!response.ok) { status.className = 'notice error'; status.textContent = result.error ?? 'Could not publish the project.'; return; }
+        status.className = 'notice success';
+        status.textContent = result.local ? 'Published locally. Opening the project…' : 'Published. Opening the project…';
+        window.setTimeout(() => { window.location.href = `/projects/${encodeURIComponent(result.slug)}`; }, 500);
+      } catch { status.className = 'notice error'; status.textContent = 'Network error. Please try again.'; }
       finally { button.disabled = false; }
     });
   }

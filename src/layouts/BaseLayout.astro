@@ -9,7 +9,7 @@ const session = Astro.locals.session;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#09090b" />
+    <meta name="theme-color" content="#0a0710" />
     <link rel="icon" href="/launchpad-logo.png" />
     <title>{title} · Launchpad</title>
   </head>
@@ -21,8 +21,8 @@ const session = Astro.locals.session;
           <span>Launchpad</span>
         </a>
         <nav class="site-nav" aria-label="Primary navigation">
-          <a class="nav-link" href="/projects">Projects</a>
-          <a class="nav-link nav-submit" href="/submit"><span>Submit</span><span class="nav-plus">+</span></a>
+          <a class="nav-button" href="/projects">Projects</a>
+          {session && <a class="nav-button nav-submit" href="/submit">Submit <span class="nav-plus">+</span></a>}
           {session ? (
             <>
               <a class="nav-profile" href="/profile">
@@ -30,11 +30,11 @@ const session = Astro.locals.session;
                 <span>Profile</span>
               </a>
               <form method="post" action="/api/auth/logout" class="nav-form">
-                <button class="nav-link nav-logout" type="submit">Sign out</button>
+                <button class="nav-button" type="submit">Sign out</button>
               </form>
             </>
           ) : (
-            <a class="nav-link nav-login" href="/api/auth/github">Sign in with GitHub <span>↗</span></a>
+            <a class="nav-button nav-login" href="/api/auth/github">Sign in with GitHub <span>↗</span></a>
           )}
         </nav>
       </div>

@@ -15,10 +15,12 @@ export function safeNext(value: string | null) {
 
 export function parseGithubUrl(value: string) {
   const url = new URL(value);
-  if (url.hostname !== 'github.com') throw new Error('GitHub URL must use github.com');
-  const [owner, repo] = url.pathname.split('/').filter(Boolean);
-  if (!owner || !repo) throw new Error('Invalid GitHub repository URL');
-  return { owner, repo: repo.replace(/\.git$/, '') };
+  if (url.protocol !== 'https:' || url.hostname !== 'github.com') {
+    throw new Error('GitHub URL must use https://github.com');
+  }
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (parts.length < 2) throw new Error('Invalid GitHub repository URL');
+  return { owner: parts[0], repo: parts[1].replace(/\.git$/, '') };
 }
 
 export function yamlString(value: string) {

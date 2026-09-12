@@ -7,20 +7,17 @@ const projects = (await getCollection('projects')).sort((a,b) => b.data.date.val
 const categories = [...new Set(projects.map((p) => p.data.category))].sort();
 ---
 <BaseLayout title="Projects" description="All projects showcased through Launchpad.">
-  <section class="projects-section container" style="padding-top:72px">
-    <p class="eyebrow">PROJECT ARCHIVE</p>
-    <h1 style="font-size:clamp(46px,6vw,76px);line-height:.96;letter-spacing:-.06em;margin-bottom:14px">Projects built here.</h1>
-    <p class="submit-copy">Browse everything showcased through Launchpad. Search by project or builder, then open the individual project page for the demo, repository and GitHub activity.</p>
-    <div class="filters">
-      <input id="project-search" placeholder="Search projects or builders…" autocomplete="off" />
-      <select id="category-filter" aria-label="Filter by category">
-        <option value="">All categories</option>
-        {categories.map((category) => <option value={category}>{category}</option>)}
-      </select>
+  <section class="projects-section archive-page">
+    <div class="page-intro compact">
+      <p class="eyebrow">PROJECT ARCHIVE</p>
+      <h1>Projects built here.</h1>
+      <p class="submit-copy">Everything showcased through Launchpad, kept in one permanent place.</p>
     </div>
-    <div class="project-grid" id="project-grid">
-      {projects.map((project) => <div class="project-item" data-title={project.data.title.toLowerCase()} data-student={project.data.studentName.toLowerCase()} data-category={project.data.category}><ProjectCard project={project} /></div>)}
+    <div class="archive-bar">
+      <div><strong>{projects.length}</strong><span> projects</span></div>
+      <div class="filters"><input id="project-search" placeholder="Search projects or builders…" autocomplete="off" /><select id="category-filter" aria-label="Filter by category"><option value="">All categories</option>{categories.map((category)=><option value={category}>{category}</option>)}</select></div>
     </div>
+    <div class="project-grid" id="project-grid">{projects.map((project)=><div class="project-item" data-title={project.data.title.toLowerCase()} data-student={project.data.studentName.toLowerCase()} data-category={project.data.category}><ProjectCard project={project} /></div>)}</div>
     <p id="empty-state" class="empty" hidden>No projects match that search.</p>
   </section>
 </BaseLayout>
@@ -29,18 +26,6 @@ const categories = [...new Set(projects.map((p) => p.data.category))].sort();
   const filter = document.querySelector<HTMLSelectElement>('#category-filter');
   const items = Array.from(document.querySelectorAll<HTMLElement>('.project-item'));
   const empty = document.querySelector<HTMLElement>('#empty-state');
-  function apply() {
-    if (!search || !filter || !empty) return;
-    const term = search.value.trim().toLowerCase();
-    const category = filter.value;
-    let visible = 0;
-    for (const item of items) {
-      const match = (!term || (item.dataset.title ?? '').includes(term) || (item.dataset.student ?? '').includes(term)) && (!category || item.dataset.category === category);
-      item.hidden = !match;
-      if (match) visible++;
-    }
-    empty.hidden = visible !== 0;
-  }
-  search?.addEventListener('input', apply);
-  filter?.addEventListener('change', apply);
+  function apply(){ if(!search||!filter||!empty)return; const term=search.value.trim().toLowerCase(); const category=filter.value; let visible=0; for(const item of items){const match=(!term||(item.dataset.title??'').includes(term)||(item.dataset.student??'').includes(term))&&(!category||item.dataset.category===category);item.hidden=!match;if(match)visible++;} empty.hidden=visible!==0; }
+  search?.addEventListener('input',apply); filter?.addEventListener('change',apply);
 </script>

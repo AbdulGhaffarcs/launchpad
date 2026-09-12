@@ -3,15 +3,10 @@ import { refreshUserToken, type GithubUser } from './github';
 
 const COOKIE = 'lp_session';
 const STATE_COOKIE = 'lp_oauth_state';
+const VERIFIER_COOKIE = 'lp_oauth_verifier';
 const NEXT_COOKIE = 'lp_oauth_next';
 
-function secret() {
-  const value = import.meta.env.SESSION_SECRET ?? process.env.SESSION_SECRET;
-  if (!value || value.length < 32) throw new Error('SESSION_SECRET must be at least 32 characters');
-  return new TextEncoder().encode(value);
-}
-
-type Session = JWTPayload & {
+export type Session = JWTPayload & {
   login: string;
   avatarUrl: string;
   accessToken: string;
@@ -19,8 +14,18 @@ type Session = JWTPayload & {
   expiresAt: number;
 };
 
+function secret() {
+  const value = import.meta.env.SESSION_SECRET ?? process.env.SESSION_SECRET;
+  if (!value || value.length < 32) throw new Error('SESSION_SECRET must be at least 32 characters');
+  return new TextEncoder().encode(value);
+}
+
 export async function sealSession(data: Omit<Session, 'iat' | 'exp'>) {
-  return new SignJWT(data).setProtectedHeader({ alg: 'HS256', typ: 'JWT' }).setIssuedAt().setExpirationTime('180d').sign(secret());
+  return new SignJWT(data)
+    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setIssuedAt()
+    .setExpirationTime('180d')
+    .sign(secret());
 }
 
 export async function readSession(cookieValue: string | undefined) {
@@ -28,18 +33,22 @@ export async function readSession(cookieValue: string | undefined) {
   try {
     const { payload } = await jwtVerify(cookieValue, secret());
     return payload as Session;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export async function getSession(cookies: any) {
   const raw = cookies.get(COOKIE)?.value;
   const session = await readSession(raw);
   if (!session) return null;
+
   if (session.expiresAt > Date.now() + 60_000) return session;
   if (!session.refreshToken) return null;
+
   try {
     const refreshed = await refreshUserToken(session.refreshToken);
-    const next = {
+    const next: Omit<Session, 'iat' | 'exp'> = {
       login: session.login,
       avatarUrl: session.avatarUrl,
       accessToken: refreshed.access_token,
@@ -47,7 +56,7 @@ export async function getSession(cookies: any) {
       expiresAt: Date.now() + refreshed.expires_in * 1000,
     };
     setSession(cookies, await sealSession(next));
-    return { ...session, ...next };
+    return next;
   } catch {
     clearSession(cookies);
     return null;
@@ -55,21 +64,47 @@ export async function getSession(cookies: any) {
 }
 
 export function setSession(cookies: any, token: string) {
-  cookies.set(COOKIE, token, { httpOnly: true, secure: import.meta.env.PROD, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 180 });
+  cookies.set(COOKIE, token, {
+    httpOnly: true,
+    secure: import.meta.env.PROD,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 180,
+  });
 }
-export function clearSession(cookies: any) { cookies.delete(COOKIE, { path: '/' }); }
-export function setOAuthState(cookies: any, state: string, next: string) {
-  cookies.set(STATE_COOKIE, state, { httpOnly: true, secure: import.meta.env.PROD, sameSite: 'lax', path: '/', maxAge: 600 });
-  cookies.set(NEXT_COOKIE, next, { httpOnly: true, secure: import.meta.env.PROD, sameSite: 'lax', path: '/', maxAge: 600 });
+
+export function clearSession(cookies: any) {
+  cookies.delete(COOKIE, { path: '/' });
 }
+
+export function setOAuthState(cookies: any, state: string, verifier: string, next: string) {
+  const common = {
+    httpOnly: true,
+    secure: import.meta.env.PROD,
+    sameSite: 'lax' as const,
+    path: '/',
+    maxAge: 600,
+  };
+  cookies.set(STATE_COOKIE, state, common);
+  cookies.set(VERIFIER_COOKIE, verifier, common);
+  cookies.set(NEXT_COOKIE, next, common);
+}
+
 export function consumeOAuthState(cookies: any) {
   const state = cookies.get(STATE_COOKIE)?.value;
+  const verifier = cookies.get(VERIFIER_COOKIE)?.value;
   const next = cookies.get(NEXT_COOKIE)?.value || '/';
   cookies.delete(STATE_COOKIE, { path: '/' });
+  cookies.delete(VERIFIER_COOKIE, { path: '/' });
   cookies.delete(NEXT_COOKIE, { path: '/' });
-  return { state, next };
+  return { state, verifier, next };
 }
-export async function sessionFromGithubUser(cookies: any, user: GithubUser, oauth: { access_token: string; refresh_token?: string; expires_in?: number }) {
+
+export async function sessionFromGithubUser(
+  cookies: any,
+  user: GithubUser,
+  oauth: { access_token: string; refresh_token?: string; expires_in?: number },
+) {
   setSession(cookies, await sealSession({
     login: user.login,
     avatarUrl: user.avatar_url,

@@ -2,51 +2,95 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getCollection } from 'astro:content';
 import { getSession } from '../../lib/session';
-import { getUser, getRepoContent } from '../../lib/github';
+import { getUser } from '../../lib/github';
+import { readProfile } from '../../lib/storage';
 
 export const prerender = false;
 const session = await getSession(Astro.cookies);
 if (!session) return Astro.redirect('/api/auth/github?next=/profile');
-const github = await getUser(session.accessToken);
-let profile: Record<string,string> = {};
-try {
-  const file = await getRepoContent(`src/content/profiles/${session.login.toLowerCase()}.json`);
-  if (file?.content) profile = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));
-} catch (error) {
-  console.error('Could not load Launchpad profile data:', error);
-}
-const projects = (await getCollection('projects')).filter(p => (p.data.ownerLogin ?? p.data.studentName).toLowerCase() === session.login.toLowerCase());
+
+let github = null as Awaited<ReturnType<typeof getUser>> | null;
+try { github = await getUser(session.accessToken); } catch (error) { console.error('Could not refresh GitHub profile:', error); }
+
+const profile = await readProfile(session.login);
+const projects = (await getCollection('projects')).filter((project) =>
+  (project.data.ownerLogin ?? project.data.studentName).toLowerCase() === session.login.toLowerCase()
+);
+
+const displayName = profile.displayName || github?.name || github?.login || session.login;
+const username = github?.login || session.login;
+const avatarUrl = github?.avatar_url || session.avatarUrl;
+const githubUrl = github?.html_url || '';
 ---
 <BaseLayout title="Profile">
   <section class="profile-page">
     <p class="eyebrow">YOUR LAUNCHPAD</p>
     <h1>Profile & projects.</h1>
+
     <div class="profile-head">
-      <img src={github.avatar_url} alt="" />
-      <div><h2>{profile.displayName || github.name || github.login}</h2><p>@{github.login}</p>{github.html_url && <p><a class="text-link" href={github.html_url} target="_blank" rel="noopener noreferrer">Open GitHub profile ↗</a></p>}</div>
+      <img class="profile-avatar" src={avatarUrl} alt="" />
+      <div class="profile-identity">
+        <h2>{displayName}</h2>
+        <p>@{username}</p>
+        {githubUrl && <a class="text-link" href={githubUrl} target="_blank" rel="noopener noreferrer">Open GitHub profile ↗</a>}
+      </div>
     </div>
+
     <div class="profile-grid">
       <section class="panel">
-        <h2>Profile settings</h2>
-        <form id="profile-form">
-          <label>Display name<input name="displayName" value={profile.displayName || github.name || github.login} maxlength="80" /></label>
-          <label style="margin-top:16px">Bio<textarea name="bio" rows="5" maxlength="280">{profile.bio || github.bio || ''}</textarea></label>
-          <label style="margin-top:16px">Website<input name="website" type="url" value={profile.website || github.blog || ''} placeholder="https://..." /></label>
-          <label style="margin-top:16px">LinkedIn<input name="linkedin" type="url" value={profile.linkedin || ''} placeholder="https://linkedin.com/in/..." /></label>
-          <div class="form-actions"><button id="profile-save" class="button primary" type="submit">Save profile</button></div>
-          <p id="profile-status" class="form-status"></p>
+        <div class="panel-heading">
+          <div><p class="eyebrow">ACCOUNT</p><h2>Profile settings</h2></div>
+          <span class="status-dot">Connected</span>
+        </div>
+        <form id="profile-form" class="profile-form">
+          <label>Display name<input name="displayName" value={displayName} maxlength="80" /></label>
+          <label>Bio<textarea name="bio" rows="5" maxlength="280" placeholder="What are you building?">{profile.bio || github?.bio || ''}</textarea></label>
+          <div class="two-col">
+            <label>Website<input name="website" type="url" value={profile.website || github?.blog || ''} placeholder="https://..." /></label>
+            <label>LinkedIn<input name="linkedin" type="url" value={profile.linkedin || ''} placeholder="https://linkedin.com/in/..." /></label>
+          </div>
+          <div class="form-actions"><button id="profile-save" class="button primary" type="submit">Save profile</button><span id="profile-status" class="form-status" aria-live="polite"></span></div>
         </form>
       </section>
+
       <section class="panel">
-        <h2>Your projects</h2>
-        {projects.length === 0 ? <p class="muted">No projects are linked to this account yet.</p> : projects.map(project => <div class="project-row"><div><strong>{project.data.title}</strong><span>{project.data.category}</span></div><a class="button secondary" href={`/projects/${project.id}/edit`}>Edit</a></div>)}
+        <div class="panel-heading">
+          <div><p class="eyebrow">YOUR WORK</p><h2>Projects</h2></div>
+          <a class="text-link" href="/submit">Add project →</a>
+        </div>
+        {projects.length === 0 ? (
+          <div class="empty-panel"><strong>No projects yet.</strong><p>Your first showcase will appear here.</p><a class="button secondary" href="/submit">Submit a project</a></div>
+        ) : (
+          <div class="project-list">
+            {projects.map((project) => (
+              <div class="project-row">
+                <div><strong>{project.data.title}</strong><span>{project.data.category}</span></div>
+                <div class="row-actions"><a class="button ghost" href={`/projects/${project.id}`}>View</a><a class="button secondary" href={`/projects/${project.id}/edit`}>Edit</a></div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   </section>
 </BaseLayout>
 <script>
-  const form=document.querySelector<HTMLFormElement>('#profile-form');
-  const button=document.querySelector<HTMLButtonElement>('#profile-save');
-  const status=document.querySelector<HTMLElement>('#profile-status');
-  form?.addEventListener('submit',async(e)=>{e.preventDefault();if(!form||!button||!status)return;button.disabled=true;status.textContent='Saving…';const r=await fetch('/api/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(form).entries()))});const d=await r.json().catch(()=>({}));status.textContent=r.ok?'Saved. The live site is rebuilding now.':(d.error??'Could not save.');button.disabled=false;});
+  const form = document.querySelector<HTMLFormElement>('#profile-form');
+  const button = document.querySelector<HTMLButtonElement>('#profile-save');
+  const status = document.querySelector<HTMLElement>('#profile-status');
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!button || !status) return;
+    button.disabled = true;
+    status.textContent = 'Saving…';
+    try {
+      const response = await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(new FormData(form).entries())) });
+      const data = await response.json().catch(() => ({}));
+      status.textContent = response.ok ? (data.local ? 'Saved locally.' : 'Saved. The live site will rebuild shortly.') : (data.error ?? 'Could not save.');
+    } catch {
+      status.textContent = 'Network error. Please try again.';
+    } finally {
+      button.disabled = false;
+    }
+  });
 </script>
